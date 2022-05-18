@@ -7,7 +7,7 @@ import pydantic
 
 from rich.progress import track
 
-from ...constants import C_0, ETA_0, HERTZ, MICROMETER
+from ...constants import C_0, ETA_0, HERTZ, MICROMETER, fp_eps
 from ...components.data import SimulationData, FieldData
 from ...components.monitor import FieldMonitor
 from ...components.types import Direction, Axis, Coordinate, ArrayLike
@@ -367,9 +367,12 @@ the number of directions ({len(normal_dirs)})."
                 sim_data.simulation.center[idx] + sim_data.simulation.size[idx] / 2.0,
             )
             size = stop - start
+            print(start, stop)
+            print(surface.monitor.center[idx] - surface.monitor.size[idx] / 2.0, surface.monitor.center[idx] + surface.monitor.size[idx] / 2.0)
+            print(sim_data.simulation.center[idx] - sim_data.simulation.size[idx], sim_data.simulation.center[idx] + sim_data.simulation.size[idx])
 
             num_pts = int(np.ceil(pts_per_wavelength * size / wavelength))
-            points = np.linspace(start, stop, num_pts)
+            points = np.linspace(start+fp_eps, stop-fp_eps, num_pts)
             colocation_points[idx] = points
 
         currents = currents.colocate(*colocation_points)
