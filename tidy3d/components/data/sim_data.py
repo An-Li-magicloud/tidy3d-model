@@ -4,19 +4,26 @@ from typing import Dict
 import pydantic as pd
 
 from .base import Tidy3dData
-from .monitor_data import MonitorData
+from .monitor_data import MonitorDataType
 from ..simulation import Simulation
 
 # TODO: Selecting monitor data using getitem
 # TODO: normalization
 # TODO: final decay value
 # TODO: centering of field data
-# TODO: plotting
+# TODO: plotting (put some stuff in viz?)
+# TODO: saving and loading from hdf5 group or json file
+# TODO: docstring examples?
+# TODO: getitem
+# TODO: at centers
+# TODO: ModeSolverData?
+
 
 class SimulationData(Tidy3dData):
     """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`."""
+
     simulation: Simulation
-    monitor_data: Dict[str, MonitorData]
+    monitor_data: Dict[str, MonitorDataType]
 
     simulation: Simulation = pd.Field(
         ...,

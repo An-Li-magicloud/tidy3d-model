@@ -1,4 +1,4 @@
-"""Tests data.py"""
+"""Tests data/data_array.py"""
 
 import pytest
 import numpy as np
@@ -108,7 +108,20 @@ def test_flux_time_data_array():
     data = make_flux_time_data_array()
     data = data.interp(t=1e-13)
 
+
 def test_attrs():
     data = make_flux_data_array()
     assert data.attrs, "data has no attrs"
     assert data.f.attrs, "data coordinates have no attrs"
+
+
+def test_ops():
+    data1 = make_flux_data_array()
+    data2 = make_flux_data_array()
+    data1.data = np.ones_like(data1.data)
+    data2.data = np.ones_like(data2.data)
+    data3 = make_flux_time_data_array()
+    assert np.all(data1 == data2), "identical data are not equal"
+    data1.data[0] = 1e12
+    assert not np.all(data1 == data2), "different data are equal"
+    assert not np.all(data1 == data3), "different data are equal"

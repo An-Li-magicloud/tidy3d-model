@@ -1,3 +1,6 @@
+"""Tests data/monitor_data.py"""
+import numpy as np
+
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
 from tidy3d.components.monitor import ModeFieldMonitor, ModeMonitor
 from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
@@ -34,45 +37,49 @@ INTERVAL = 2
 
 def make_field_data():
     monitor = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
-    return FieldData(monitor=monitor, Ex=FIELD, Ey=FIELD, Hz=FIELD)
+    return FieldData(monitor=monitor, Ex=FIELD.copy(), Ey=FIELD.copy(), Hz=FIELD.copy())
 
 
 def make_field_time_data():
     monitor = FieldTimeMonitor(size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL)
-    return FieldTimeData(monitor=monitor, Ex=FIELD_TIME, Ey=FIELD_TIME, Hz=FIELD_TIME)
+    return FieldTimeData(
+        monitor=monitor, Ex=FIELD_TIME.copy(), Ey=FIELD_TIME.copy(), Hz=FIELD_TIME.copy()
+    )
 
 
 def make_mode_field_data():
     monitor = ModeFieldMonitor(size=SIZE_2D, name="mode_field", mode_spec=MODE_SPEC, freqs=FREQS)
     return ModeFieldData(
         monitor=monitor,
-        Ex=MODE_FIELD,
-        Ey=MODE_FIELD,
-        Ez=MODE_FIELD,
-        Hx=MODE_FIELD,
-        Hy=MODE_FIELD,
-        Hz=MODE_FIELD,
+        Ex=MODE_FIELD.copy(),
+        Ey=MODE_FIELD.copy(),
+        Ez=MODE_FIELD.copy(),
+        Hx=MODE_FIELD.copy(),
+        Hy=MODE_FIELD.copy(),
+        Hz=MODE_FIELD.copy(),
     )
 
 
 def make_permittivity_data():
     monitor = PermittivityMonitor(size=SIZE_3D, name="permittivity", freqs=FREQS)
-    return PermittivityData(monitor=monitor, eps_xx=FIELD, eps_yy=FIELD, eps_zz=FIELD)
+    return PermittivityData(
+        monitor=monitor, eps_xx=FIELD.copy(), eps_yy=FIELD.copy(), eps_zz=FIELD.copy()
+    )
 
 
 def make_mode_data():
     monitor = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
-    return ModeData(monitor=monitor, amps=AMPS, n_complex=N_COMPLEX)
+    return ModeData(monitor=monitor, amps=AMPS.copy(), n_complex=N_COMPLEX.copy())
 
 
 def make_flux_data():
     monitor = FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
-    return FluxData(monitor=monitor, flux=FLUX)
+    return FluxData(monitor=monitor, flux=FLUX.copy())
 
 
 def make_flux_time_data():
     monitor = FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
-    return FluxTimeData(monitor=monitor, flux=FLUX_TIME)
+    return FluxTimeData(monitor=monitor, flux=FLUX_TIME.copy())
 
 
 """ Test them out """
@@ -117,3 +124,15 @@ def test_flux_data():
 def test_flux_time_data():
     data = make_flux_time_data()
     _ = data.flux
+
+
+def test_eq():
+    data1 = make_flux_data()
+    data2 = make_flux_data()
+    data1.flux.data = np.ones_like(data1.flux.data)
+    data2.flux.data = np.ones_like(data2.flux.data)
+    data3 = make_flux_time_data_array()
+    assert data1 == data2, "same data are not equal"
+    data1.flux.data[0] = 1e12
+    assert data1 != data2, "different data are equal"
+    assert data1 != data3, "different data are equal"

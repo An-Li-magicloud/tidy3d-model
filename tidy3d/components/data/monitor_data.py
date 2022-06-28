@@ -1,21 +1,52 @@
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
 from abc import ABC
+from typing import Union, Dict
+from typing_extensions import Annotated
 
 import pydantic as pd
 
-from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeFieldMonitor
+from ..base import TYPE_TAG_STR
+from ..monitor import Monitor, MonitorType, FieldMonitor, FieldTimeMonitor, ModeFieldMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
+from ..validators import enforce_monitor_fields_present
+
 from .base import Tidy3dData
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import FluxTimeDataArray, FluxDataArray, ModeIndexDataArray, ModeAmpsDataArray
 
-# TODO: separate validator for field
-# TODO: base class for field stuff with symmetry?
+# TODO: base class for field objects?
+# TODO: saving and loading from hdf5 group or json file
+# TODO: field data colocate
+# TODO: mode data neff, keff properties
+# TODO: docstring examples?
+# TODO: ModeFieldData select by index -> FieldData
+# TODO: equality checking two MonitorData
+
 
 class MonitorData(Tidy3dData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`.monitor`."""
 
-    monitor: MonitorType
+    monitor: MonitorType = pd.Field(
+        ...,
+        title="Monitor",
+        description="Monitor associated with the data.",
+        descriminator=TYPE_TAG_STR,
+    )
+
+    def expand_symmetry(grid, center) -> "Self":
+        """Return copy of self with symmetry applied. If None, flags that data is unaffected."""
+        return None
+
+    def normalize(self, source_freq_amps) -> "Self":
+        """Return copy of self after normalization is applied using source spectrum."""
+        if self.normalized:
+            raise ValueError("object already normalized")
+        return None
+
+
+# class AbstractField(MonitorData, ABC):
+#     """Collection of scalar fields with some symmetry properties."""
+#     monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeFieldMonitor]
 
 
 class FieldData(MonitorData):
@@ -54,12 +85,7 @@ class FieldData(MonitorData):
         description="Spatial distribution of the z-component of the magnetic field.",
     )
 
-    @pd.root_validator(skip_on_failure=True)
-    def _contains_fields(cls, values):
-        """Make sure the initially specified fields are here."""
-        for field_name in values.get("monitor").fields:
-            assert values.get(field_name) is not None, f"missing field {field_name}"
-        return values
+    _contains_monitor_fields = enforce_monitor_fields_present()
 
 
 class FieldTimeData(MonitorData):
@@ -98,12 +124,7 @@ class FieldTimeData(MonitorData):
         description="Spatial distribution of the z-component of the magnetic field.",
     )
 
-    @pd.root_validator(skip_on_failure=True)
-    def _contains_fields(cls, values):
-        """Make sure the initially specified fields are here."""
-        for field_name in values.get("monitor").fields:
-            assert values.get(field_name) is not None, f"missing field {field_name}"
-        return values
+    _contains_monitor_fields = enforce_monitor_fields_present()
 
 
 class PermittivityData(MonitorData):
@@ -191,3 +212,11 @@ class FluxTimeData(MonitorData):
 
     monitor: FluxTimeMonitor
     flux: FluxTimeDataArray
+
+
+MonitorDataType = Annotated[
+    Union[
+        FieldData, FieldTimeData, PermittivityData, ModeFieldData, ModeData, FluxData, FluxTimeData
+    ],
+    pd.Field(discriminator=TYPE_TAG_STR),
+]

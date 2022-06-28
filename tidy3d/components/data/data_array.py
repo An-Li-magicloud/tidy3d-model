@@ -1,9 +1,15 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from abc import ABC, abstractmethod
+from typing import Dict
 
 import xarray as xr
+import numpy as np
 
 from ...constants import HERTZ, SECOND, MICROMETER
+
+# TODO: docstring examples?
+# TODO: constrain xarray creation by specifying type of the data?
+# TODO: saving and loading from hdf5 group or json file.
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -16,6 +22,7 @@ DIM_ATTRS = {
     "mode_index": {"units": None, "long_name": "mode index"},
 }
 
+
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires __slots__ to match the keys of the coords."""
 
@@ -23,7 +30,7 @@ class DataArray(xr.DataArray):
     __slots__ = ()
 
     # stores a dictionary of attributes corresponding to the data values
-    _data_attrs = {}
+    _data_attrs: Dict[str, str] = {}
 
     def __init__(self, *args, **kwargs):
 
@@ -89,10 +96,9 @@ class ModeAmpsDataArray(DataArray):
     __slots__ = ("direction", "f", "mode_index")
     _data_attrs = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
 
+
 class ModeIndexDataArray(DataArray):
     """Complex-valued effective propagation index of a mode."""
 
     __slots__ = ("f", "mode_index")
     _data_attrs = {"units": None, "long_name": "Propagation index"}
-
-

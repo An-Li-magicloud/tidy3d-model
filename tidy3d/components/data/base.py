@@ -1,13 +1,19 @@
 """ Base class of all Data Objects"""
 
 from abc import ABC, abstractmethod
-from ..base import Tidy3dBaseModel
 
+import pydantic as pd
 import h5py
+
+from ..base import Tidy3dBaseModel
 
 
 class Tidy3dData(Tidy3dBaseModel, ABC):
     """All data stuff inherits from this."""
+
+    normalized: bool = pd.Field(
+        None, title="Normalized", description="Whether the data object has been normalized."
+    )
 
     def to_hdf5(self, fname):
         with open(fname) as f:
