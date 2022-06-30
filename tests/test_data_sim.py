@@ -32,4 +32,9 @@ def make_sim_data():
 
 
 def test_sim_data():
-    data = make_sim_data()
+    sim_data = make_sim_data()
+
+def test_getitem():
+    sim_data = make_sim_data()
+    for mon in sim_data.simulation.monitors:
+        data = sim_data[mon.name]

@@ -126,7 +126,7 @@ def test_flux_time_data():
     _ = data.flux
 
 
-def test_eq():
+def _test_eq():
     data1 = make_flux_data()
     data2 = make_flux_data()
     data1.flux.data = np.ones_like(data1.flux.data)
