@@ -25,6 +25,7 @@ from .data_array import DataArray
 # TODO: docstring examples?
 # TODO: ModeFieldData select by index -> FieldData
 # TODO: equality checking two MonitorData
+# TODO: normalization
 
 
 class MonitorData(Tidy3dData, ABC):
@@ -37,15 +38,15 @@ class MonitorData(Tidy3dData, ABC):
         descriminator=TYPE_TAG_STR,
     )
 
-    def apply_symmetry(self, grid, center) -> "Self":
+    def apply_symmetry(
+        self, symmetry: Symmetry, symmetry_center: Coordinate, grid_expanded: Grid
+    ) -> "Self":
         """Return copy of self with symmetry applied."""
         return self.copy()
 
-    def normalize(self, source_freq_amps) -> "Self":
-        """Return copy of self after normalization is applied using source spectrum."""
-        if self.normalized:
-            raise ValueError("object already normalized")
-        return None
+    def normalize(self, source_spectrum_fn) -> "Self":
+        """Return copy of self after normalization is applied using source spectrum function."""
+        return self.copy()
 
 
 class AbstractFieldData(MonitorData, ABC):
@@ -160,6 +161,12 @@ class FieldData(ElectromagneticFieldData):
     )
 
     _contains_monitor_fields = enforce_monitor_fields_present()
+
+    def normalize(self, source_spectrum_fn) -> "FieldData":
+        """Return copy of self after normalization is applied using source spectrum function."""
+        src_amps = source_spectrum_fn(self.f)
+        field_norm = {name: val / src_amps for name, (val, _, _) in self.field_components.items()}
+        return self.copy(update=field_norm)
 
 
 class FieldTimeData(ElectromagneticFieldData):
@@ -282,12 +289,22 @@ class ModeData(MonitorData):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
+    def normalize(self, source_spectrum_fn) -> "ModeData":
+        """Return copy of self after normalization is applied using source spectrum function."""
+        source_freq_amps = source_spectrum_fn(self.f)[None, :, None]
+        return self.copy(update={"amps": self.amps / source_freq_amps})
+
 
 class FluxData(MonitorData):
     """Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain."""
 
     monitor: FluxMonitor
     flux: FluxDataArray
+
+    def normalize(self, source_spectrum_fn) -> "Self":
+        """Return copy of self after normalization is applied using source spectrum function."""
+        source_power = abs(source_freq_amps) ** 2
+        return self.copy(update={"flux": self.flux / source_power})
 
 
 class FluxTimeData(MonitorData):
