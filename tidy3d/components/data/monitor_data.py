@@ -154,9 +154,9 @@ class AbstractFieldData(MonitorData, ABC):
                 # if only one element in data long dim, just assign as coord
                 coord_data = field_data.coords[coord_name]
                 if len(coord_data) == 1:
-                    if not np.isclose(coord_data, coords_supplied[0]):
+                    if not np.isclose(coord_data, coords_supplied):
                         raise DataError(
-                            f"colocate given {coord_name}={coords_supplied[0]}, but "
+                            f"colocate given {coord_name}={coords_supplied}, but "
                             f"data only has one coordinate at {coord_name}={coord_data.values[0]}. "
                             "Therefore, can't colocate along this dimension. "
                             f"supply {coord_name}=None to skip it or correct the value."
@@ -310,6 +310,21 @@ class ModeFieldData(ElectromagneticFieldData):
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )
 
+    def sel_mode_index(self, mode_index: pd.NonNegativeInt) -> FieldData:
+        """Return :class:`.FieldData` for the specificed mode index."""
+
+        fields = {}
+        for field_name, (data, _, _) in self.field_components.items():
+            data = data.sel(mode_index=mode_index)
+            coords = {key: val.data for key, val in data.coords.items()}
+            scalar_field = ScalarFieldDataArray(data.data, coords=coords)
+            fields[field_name] = scalar_field
+
+        monitor_dict = self.monitor.dict(exclude={TYPE_TAG_STR, "mode_spec"})
+        field_monitor = FieldMonitor(**monitor_dict)
+
+        return FieldData(monitor=field_monitor, **fields)
+
 
 class PermittivityData(MonitorData):
     """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor."""
@@ -346,9 +361,11 @@ class ModeData(MonitorData):
     """Data associated with a :class:`.ModeMonitor`: modal amplitudes and propagation indices."""
 
     monitor: ModeMonitor
+
     amps: ModeAmpsDataArray = pd.Field(
         ..., title="Amplitudes", description="Complex-valued amplitudes associated with the mode."
     )
+
     n_complex: ModeIndexDataArray = pd.Field(
         ...,
         title="Amplitudes",
@@ -359,6 +376,16 @@ class ModeData(MonitorData):
         """Return copy of self after normalization is applied using source spectrum function."""
         source_freq_amps = source_spectrum_fn(self.f)[None, :, None]
         return self.copy(update={"amps": self.amps / source_freq_amps})
+
+    @property
+    def n_eff(self):
+        """Real part of the propagation index."""
+        return self.n_complex.real
+
+    @property
+    def k_eff(self):
+        """Imaginary part of the propagation index."""
+        return self.n_complex.imag
 
 
 class FluxData(MonitorData):

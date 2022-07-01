@@ -10,9 +10,7 @@ from ..base import cached_property
 from ..simulation import Simulation
 from ...log import log, DataError
 
-# TODO: normalization
 # TODO: final decay value
-# TODO: centering of field data
 # TODO: plotting (put some stuff in viz?)
 # TODO: saving and loading from hdf5 group or json file
 # TODO: docstring examples?
