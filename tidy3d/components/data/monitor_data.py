@@ -2,7 +2,8 @@
 from abc import ABC, abstractmethod
 from typing import Union, Dict, Tuple, Callable
 from typing_extensions import Annotated
-
+import xarray as xr
+import numpy as np
 import pydantic as pd
 
 from ..base import TYPE_TAG_STR
@@ -12,6 +13,7 @@ from ..grid import Grid
 from ..validators import enforce_monitor_fields_present
 from ..monitor import Monitor, MonitorType, FieldMonitor, FieldTimeMonitor, ModeFieldMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
+from ...log import DataError
 
 from .base import Tidy3dData
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
@@ -20,12 +22,10 @@ from .data_array import DataArray
 
 # TODO: base class for field objects?
 # TODO: saving and loading from hdf5 group or json file
-# TODO: field data colocate
 # TODO: mode data neff, keff properties
 # TODO: docstring examples?
 # TODO: ModeFieldData select by index -> FieldData
 # TODO: equality checking two MonitorData
-# TODO: normalization
 
 
 class MonitorData(Tidy3dData, ABC):
@@ -106,6 +106,72 @@ class AbstractFieldData(MonitorData, ABC):
             new_fields[field_name] = scalar_data
 
         return self.copy(update=new_fields)
+
+    def colocate(self, x=None, y=None, z=None) -> xr.Dataset:
+        """colocate all of the data at a set of x, y, z coordinates.
+
+        Parameters
+        ----------
+        x : Optional[array-like] = None
+            x coordinates of locations.
+            If not supplied, does not try to colocate on this dimension.
+        y : Optional[array-like] = None
+            y coordinates of locations.
+            If not supplied, does not try to colocate on this dimension.
+        z : Optional[array-like] = None
+            z coordinates of locations.
+            If not supplied, does not try to colocate on this dimension.
+
+        Returns
+        -------
+        xr.Dataset
+            Dataset containing all fields at the same spatial locations.
+            For more details refer to `xarray's Documentaton <https://tinyurl.com/cyca3krz>`_.
+
+        Note
+        ----
+        For many operations (such as flux calculations and plotting),
+        it is important that the fields are colocated at the same spatial locations.
+        Be sure to apply this method to your field data in those cases.
+        """
+
+        # convert supplied coordinates to array and assign string mapping to them
+        supplied_coord_map = {k: np.array(v) for k, v in zip("xyz", (x, y, z)) if v is not None}
+
+        # dict of data arrays to combine in dataset and return
+        centered_fields = {}
+
+        # loop through field components
+        for field_name, (field_data, _, _) in self.field_components.items():
+
+            # no field data, just ignore
+            if field_data is None:
+                continue
+
+            # loop through x, y, z dimensions
+            for coord_name, coords_supplied in supplied_coord_map.items():
+
+                # if only one element in data long dim, just assign as coord
+                coord_data = field_data.coords[coord_name]
+                if len(coord_data) == 1:
+                    if not np.isclose(coord_data, coords_supplied[0]):
+                        raise DataError(
+                            f"colocate given {coord_name}={coords_supplied[0]}, but "
+                            f"data only has one coordinate at {coord_name}={coord_data.values[0]}. "
+                            "Therefore, can't colocate along this dimension. "
+                            f"supply {coord_name}=None to skip it or correct the value."
+                        )
+
+                # otherwise, interpolate at the supplied coordinates for this dim
+                else:
+                    field_data = field_data.interp(
+                        {coord_name: coords_supplied}, kwargs={"bounds_error": True}
+                    )
+
+            centered_fields[field_name] = field_data.copy()
+
+        # combine all centered fields in a dataset
+        return xr.Dataset(centered_fields)
 
 
 class ElectromagneticFieldData(AbstractFieldData, ABC):

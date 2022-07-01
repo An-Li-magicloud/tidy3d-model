@@ -1,6 +1,7 @@
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeFieldMonitor
 
 from .test_data_monitor import make_field_data, make_field_time_data, make_permittivity_data
 from .test_data_monitor import make_mode_data, make_mode_field_data
@@ -39,3 +40,10 @@ def test_getitem():
     sim_data = make_sim_data()
     for mon in sim_data.simulation.monitors:
         data = sim_data[mon.name]
+
+
+def test_centers():
+    sim_data = make_sim_data()
+    for mon in sim_data.simulation.monitors:
+        if isinstance(mon, (FieldMonitor, FieldTimeMonitor, ModeFieldMonitor)):
+            data = sim_data.at_centers(mon.name)

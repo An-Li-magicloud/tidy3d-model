@@ -1,13 +1,14 @@
 """ Simulation Level Data """
 from typing import Dict, Optional
 
+import xarray as xr
 import pydantic as pd
 
 from .base import Tidy3dData
 from .monitor_data import MonitorDataType, AbstractFieldData
 from ..base import cached_property
 from ..simulation import Simulation
-from ...log import log
+from ...log import log, DataError
 
 # TODO: normalization
 # TODO: final decay value
@@ -15,7 +16,6 @@ from ...log import log
 # TODO: plotting (put some stuff in viz?)
 # TODO: saving and loading from hdf5 group or json file
 # TODO: docstring examples?
-# TODO: at centers
 # TODO: ModeSolverData?
 
 
@@ -79,6 +79,7 @@ class SimulationData(Tidy3dData):
         monitor_data = self.monitor_data[monitor_name]
         monitor_data = self.apply_symmetry(monitor_data)
         monitor_data = self.normalize_monitor_data(monitor_data)
+        return monitor_data
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
@@ -117,3 +118,46 @@ class SimulationData(Tidy3dData):
             return spectrum * np.conj(user_defined_phase)
 
         return monitor_data.normalize(source_spectrum_fn)
+
+    def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
+        """Load monitor and raise exception if not a field monitor."""
+        mon_data = self[monitor_name]
+        if not isinstance(mon_data, AbstractFieldData):
+            raise DataError(
+                f"data for monitor '{monitor_name}' does not contain field data as it is a `{type(mon_data)}`."
+            )
+        return mon_data
+
+    def at_centers(self, field_monitor_name: str) -> xr.Dataset:
+        """return xarray.Dataset representation of field monitor data
+        co-located at Yee cell centers.
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of field monitor used in the original :class:`Simulation`.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing all of the fields in the data
+            interpolated to center locations on Yee grid.
+        """
+
+        # get the data
+        monitor_data = self.load_field_monitor(field_monitor_name)
+
+        # get the monitor, discretize, and get center locations
+        monitor = monitor_data.monitor
+        sub_grid = self.simulation.discretize(monitor, extend=True)
+        centers = sub_grid.centers
+
+        # pass coords if each of the scalar field data have more than one coordinate along a dim
+        xyz_kwargs = {}
+        for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
+            scalar_data = [data for _, (data, _, _) in monitor_data.field_components.items()]
+            coord_lens = [len(data.coords[dim]) for data in scalar_data if data is not None]
+            if all([ncoords > 1 for ncoords in coord_lens]):
+                xyz_kwargs[dim] = centers
+
+        return monitor_data.colocate(**xyz_kwargs)
