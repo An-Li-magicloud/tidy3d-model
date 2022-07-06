@@ -47,3 +47,17 @@ def test_centers():
     for mon in sim_data.simulation.monitors:
         if isinstance(mon, (FieldMonitor, FieldTimeMonitor, ModeFieldMonitor)):
             data = sim_data.at_centers(mon.name)
+
+
+def test_plot():
+    sim_data = make_sim_data()
+
+    for field_cmp in sim_data.simulation.get_monitor_by_name("field").fields:
+        sim_data.plot_field("field", field_cmp, val="real", x=1.0, f=1e14)
+
+    for field_cmp in sim_data.simulation.get_monitor_by_name("field_time").fields:
+        sim_data.plot_field("field_time", field_cmp, val="real", x=1.0, t=0.0)
+
+    for field_cmp in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'):
+        sim_data.plot_field("mode_field", field_cmp, val="real", f=1e14, mode_index=1)
+
