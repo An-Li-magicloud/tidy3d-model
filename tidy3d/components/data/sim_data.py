@@ -187,7 +187,7 @@ class SimulationData(Tidy3dData):
 
         intensity_data = 0.0
         for field_cmp in field_components:
-            field_cmp_data = field_components.data_vars[field_cmp]
+            field_cmp_data = field_dataset.data_vars[field_cmp]
             intensity_data += abs(field_cmp_data) ** 2
         intensity_data.name = "Intensity"
         return intensity_data
@@ -264,36 +264,33 @@ class SimulationData(Tidy3dData):
                 )
 
         # select the extra coordinates out of the data
-        field_data_selected = field_data.sel(**sel_kwargs, drop=True).squeeze()
-
-        # get the in plane dimension for plotting array
-        xyz_kwargs_supplied = {key: val for key, val in sel_kwargs.items() if key in "xyz"}
-        if xyz_kwargs_supplied:
-            axis, position = self.simulation.parse_xyz_kwargs(**xyz_kwargs_supplied)
-        else:
-            spatial_coords = {name: field_data_selected.coords.get(name) for name in 'xyz'}
-            is_scalar = {name: coord for name, coord in spatial_coords.items() if coord is not None}
-            axis, position = list(is_scalar.items())[0]
-
-        field_data_selected = field_data_selected.squeeze(drop=True)
+        field_data = field_data.interp(**sel_kwargs)
+        field_data = field_data.squeeze(drop=True)
+        final_coords = {k: v for k, v in field_data.coords.items() if v.size > 1}
 
         # assert the data is valid for plotting
-        final_coords = field_data_selected.coords
         if len(final_coords) != 2:
             raise DataError(
-                f"Data after selection has {len(final_coords)} coordinates ({final_coords.keys()}), must be 2 spatial coordinates for plotting on plane. Please add keyword arguments to `plot_field()` to select out other"
+                f"Data after selection has {len(final_coords)} coordinates ({list(final_coords.keys())}), must be 2 spatial coordinates for plotting on plane. Please add keyword arguments to `plot_field()` to select out other"
             )
-        num_spatial_coords = sum(spatial_coord in final_coords for spatial_coord in "xyz")
-        if num_spatial_coords != 2:
+
+        spatial_coords_in_data = {coord_name: (coord_name in final_coords) for coord_name in "xyz"}
+
+        if sum(spatial_coords_in_data.values()) != 2:
             raise DataError(
                 f"All coordinates in the data after selection must be spatial (x, y, z), given {final_coords.keys()}."
             )
+
+        # get the spatial coordinate corresponding to the plane
+        planar_coord = {name: val for name, val in spatial_coords_in_data.items() if val is False}
+        axis = "xyz".index(list(planar_coord.keys())[0])
+        position = list(planar_coord.values())[0]
 
         # the frequency at which to evaluate the permittivity with None signaling freq -> inf
         freq_eps_eval = sel_kwargs["freq"] if "freq" in sel_kwargs else None
 
         return self.plot_field_array(
-            field_data=field_data_selected,
+            field_data=field_data,
             axis=axis,
             position=position,
             val=val,
