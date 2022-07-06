@@ -79,3 +79,8 @@ def test_plot():
     for field_cmp in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
         ax = sim_data.plot_field("mode_field", field_cmp, val="real", f=1e14, mode_index=1, ax=ax)
     ax = sim_data.plot_field("mode_field", "int", f=1e14, mode_index=1, ax=ax)
+
+def test_final_decay():
+    sim_data = make_sim_data()
+    sim_data.final_decay_value
+

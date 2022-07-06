@@ -13,10 +13,9 @@ from ..viz import equal_aspect, add_ax_if_none
 from ...log import log, DataError
 
 # TODO: final decay value
-# TODO: plotting (put some stuff in viz?)
 # TODO: saving and loading from hdf5 group or json file
 # TODO: docstring examples?
-# TODO: ModeSolverData?
+# TODO: ModeSolverData
 
 
 class SimulationData(Tidy3dData):
@@ -80,6 +79,21 @@ class SimulationData(Tidy3dData):
         monitor_data = self.apply_symmetry(monitor_data)
         monitor_data = self.normalize_monitor_data(monitor_data)
         return monitor_data
+
+    @property
+    def final_decay_value(self) -> float:
+        """Returns value of the field decay at the final time step."""
+        log_str = self.log
+        if log_str is None:
+            raise DataError("No log string in the SimulationData object, "
+                "can't find final decay value.")
+        lines = log_str.split("\n")
+        decay_lines = [l for l in lines if "field decay" in l]
+        final_decay = 1.0
+        if len(decay_lines) > 0:
+            final_decay_line = decay_lines[-1]
+            final_decay = float(final_decay_line.split("field decay: ")[-1])
+        return final_decay
 
     def apply_symmetry(self, monitor_data: MonitorDataType) -> MonitorDataType:
         """Return copy of :class:`.MonitorData` object with symmetry values applied."""
