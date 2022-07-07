@@ -10,7 +10,6 @@ from ..types import DataObject
 
 # TODO: docstring examples?
 # TODO: constrain xarray creation by specifying type of the data?
-# TODO: saving and loading from hdf5 group or json file.
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {

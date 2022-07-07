@@ -12,9 +12,10 @@ from ..types import Ax, Axis
 from ..viz import equal_aspect, add_ax_if_none
 from ...log import log, DataError
 
-# TODO: saving and loading from hdf5 group or json file
 # TODO: docstring examples?
 # TODO: ModeSolverData
+# TODO: fix all imports
+# TODO: fix all tests
 
 
 class SimulationData(Tidy3dData):

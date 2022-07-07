@@ -186,7 +186,7 @@ class tidycomplex(complex):  # pylint: disable=invalid-name
 
 
 class DataObject(pydantic.BaseModel):
-    """Complex number with a well defined schema."""
+    """An object used in tidy3d model that subclasses xr.DataArray."""
 
     data_dict: dict
     data_type: type

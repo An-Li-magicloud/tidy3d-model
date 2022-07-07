@@ -204,7 +204,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         with open(fname, "r", encoding="utf-8") as yaml_in:
             json_dict = yaml.safe_load(yaml_in)
-        json_raw = json.dumps(json_dict, indent=INDENT, cls=CustomJSONizer)
+        json_raw = json.dumps(json_dict, indent=INDENT)
         return cls.parse_raw(json_raw, **parse_raw_kwargs)
 
     def to_yaml(self, fname: str) -> None:
@@ -289,7 +289,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
     """
-
 
     @staticmethod
     def unpack_dataset(dataset: h5py.Dataset) -> Any:
@@ -416,7 +415,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # open the file and write to it recursively
         with h5py.File(fname, "w") as f:
             _save_group_data(data_dict, f)
-
 
     """End hdfdict modification
     ============================================================================================="""

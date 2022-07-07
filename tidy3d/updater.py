@@ -4,11 +4,10 @@ import functools
 import yaml
 
 import pydantic as pd
-import hdfdict
 
 from .version import __version__
 from .log import FileError, SetupError, log
-
+from .components.base import Tidy3dBaseModel
 
 """Storing version numbers."""
 
@@ -88,19 +87,20 @@ class Updater(pd.BaseModel):
     def from_file(cls, fname: str) -> "Updater":
         """Dictionary representing the simulation loaded from file."""
 
-        # try:
-        with open(fname, "r", encoding="utf-8") as f:
-            if ".json" in fname:
-                sim_dict = json.load(f)
-            elif ".yaml" in fname:
-                sim_dict = yaml.safe_load(f)
-            elif ".hdf5" in fname:
-                sim_dict = hdfdict.load(f)
-            else:
-                raise FileError('file extension must be ".json", ".yaml", or ".hdf5"')
+        if ".hdf5" in fname:
+            sim_dict = Tidy3dBaseModel.hdf5_to_dict(fname=fname)
+        else:
+            # try:
+            with open(fname, "r", encoding="utf-8") as f:
+                if ".json" in fname:
+                    sim_dict = json.load(f)
+                elif ".yaml" in fname:
+                    sim_dict = yaml.safe_load(f)
+                else:
+                    raise FileError('file extension must be ".json", ".yaml", or ".hdf5"')
 
-        # except Exception as e:
-        #     raise FileError(f"Could not load file {fname}") from e
+            # except Exception as e:
+            #     raise FileError(f"Could not load file {fname}") from e
 
         return cls(sim_dict=sim_dict)
 
