@@ -10,8 +10,8 @@ from tidy3d.components.data.data_array import ModeAmpsDataArray, ModeIndexDataAr
 from tidy3d.components.data.data_array import FluxDataArray, FluxTimeDataArray
 from .utils import clear_tmp
 
-FS = np.linspace(1e14, 2e14, 1001)
-TS = np.linspace(0, 1e-12, 1001)
+FS = np.linspace(1e14, 2e14, 11)
+TS = np.linspace(0, 1e-12, 11)
 XS = np.linspace(-1, 1, 10)
 YS = np.linspace(-2, 2, 20)
 ZS = np.linspace(-3, 3, 30)

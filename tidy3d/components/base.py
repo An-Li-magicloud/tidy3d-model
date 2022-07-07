@@ -1,19 +1,27 @@
 """global configuration / base class for pydantic models used to make simulation."""
 
 import json
+from typing import Any
 from functools import wraps
 
 import rich
 import pydantic
 import yaml
 import numpy as np
+import xarray as xr
+import h5py
 from pydantic.fields import ModelField
+import hdfdict
+from numpy import string_
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from ..log import FileError
 
 # default indentation (# spaces) in files
 INDENT = 4
+
+# special key used for yaml => hdf5 conversion
+TYPE_ID_HDF5 = "_type_"
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -57,6 +65,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: lambda x: tuple(x.tolist()),
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
+            xr.DataArray: lambda x: DataObject(data_type=type(x), data_dict=x.as_dict()),
         }
         frozen = True
         allow_mutation = False
@@ -109,7 +118,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             return cls.from_json(fname=fname, **parse_kwargs)
         if ".yaml" in fname:
             return cls.from_yaml(fname=fname, **parse_kwargs)
-        raise FileError(f"File must be .json or .yaml, given {fname}")
+        if ".hdf5" in fname:
+            return cls.from_hdf5(fname=fname, **parse_kwargs)
+
+        raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
     def to_file(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml or .json file
@@ -127,7 +139,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             return self.to_json(fname=fname)
         if ".yaml" in fname:
             return self.to_yaml(fname=fname)
-        raise FileError(f"File must be .json or .yaml, given {fname}")
+        if ".hdf5" in fname:
+            return self.to_hdf5(fname=fname)
+
+        raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
 
     @classmethod
     def from_json(cls, fname: str, **parse_file_kwargs):
@@ -189,7 +204,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         with open(fname, "r", encoding="utf-8") as yaml_in:
             json_dict = yaml.safe_load(yaml_in)
-        json_raw = json.dumps(json_dict, indent=INDENT)
+        json_raw = json.dumps(json_dict, indent=INDENT, cls=CustomJSONizer)
         return cls.parse_raw(json_raw, **parse_raw_kwargs)
 
     def to_yaml(self, fname: str) -> None:
@@ -209,9 +224,170 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         with open(fname, "w+", encoding="utf-8") as file_handle:
             yaml.dump(json_dict, file_handle, indent=INDENT)
 
-    # def __hash__(self) -> int:
-    #     """Hash a :class:`Tidy3dBaseModel` objects using its json string."""
-    #     return hash(self.json())
+    @classmethod
+    def from_hdf5(cls, fname: str, **parse_raw_kwargs):
+        """Loads :class:`Tidy3dBaseModel` from .yaml file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
+        **parse_raw_kwargs
+            Keyword arguments passed to pydantic's ``parse_raw`` method.
+
+        Returns
+        -------
+        :class:`Tidy3dBaseModel`
+            An instance of the component class calling `from_hdf5`.
+
+        Example
+        -------
+        >>> simulation = Simulation.from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+        """
+        self_data_dict = cls.load_hdf5(fname)
+        return cls.parse_obj(self_data_dict, **parse_raw_kwargs)
+
+    def to_hdf5(self, fname: str) -> None:
+        """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .hdf5 file to save the :class:`Tidy3dBaseModel` to.
+
+        Example
+        -------
+        >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+        """
+
+        data_dict = self.dict()
+        self.dump_hdf5(data_dict, fname)
+
+    @staticmethod
+    def unpack_dataset(dataset: h5py.Dataset) -> Any:
+        """Gets the value contained in a dataset in a form ready to insert into final dict.
+
+        Parameters
+        ----------
+        item : h5py.Dataset
+            The raw value coming from the dataset, which needs to be decoded.
+
+        Returns
+        -------
+        Value taken from the dataset ready to insert into returned dict.
+        """
+        value = dataset[()]
+
+        # try loading if tagged as YAML
+        if TYPE_ID_HDF5 in dataset.attrs:
+            if dataset.attrs[TYPE_ID_HDF5].astype(str) == "yaml":
+                value = yaml.safe_load(value.decode())
+
+        # decoding numpy arrays
+        if isinstance(value, np.ndarray):
+            if value.size == 0:
+                return ()
+            elif type(value[0]) == bytes:
+                return [val.decode("utf-8") for val in value]
+            elif value.dtype == bool:
+                return value.astype(bool)
+            else:
+                return value.tolist()
+
+        # decoding special types
+        else:
+            if type(value) == np.bool_:
+                return bool(value)
+            if type(value) == bytes:
+                return value.decode("utf-8")
+
+        return value
+
+    @classmethod
+    def load_hdf5(cls, fname: str) -> dict:
+        """Load an hdf5 file into a dictionary storing its unpacked contents.
+
+        Parameters
+        ----------
+        fname : str
+            Path to the hdf5 file.
+
+        Returns
+        -------
+        dict
+            The dictionary containing all group names as keys and datasets as values.
+        """
+
+        def _load_group_data(hdf5_group: h5py.Group, data_dict: dict) -> dict:
+            """Recusively load the data from the group with dataset unpacking as base case."""
+
+            for key, value in hdf5_group.items():
+
+                if type(value) == h5py.Group:
+                    data_dict[key] = _load_group_data(value, {})
+
+                elif isinstance(value, h5py.Dataset):
+                    data_dict[key] = cls.unpack_dataset(value)
+
+            return data_dict
+
+        # open the file and load its data recursively into a dictionary
+        with h5py.File(fname, "r") as f:
+            return _load_group_data(f, {})
+
+    @staticmethod
+    def pack_dataset(hdf5_group: h5py.Group, key: str, value: Any) -> None:
+        """Loads a key value pair as a dataset in the hdf5 group."""
+
+        # handle special cases
+        if value is None:
+            return
+        if isinstance(value, str):
+            value = value.encode("utf-8")
+        elif isinstance(value, bool):
+            value = np.array(value)
+
+        # try creating the dataset directly
+        try:
+            ds = hdf5_group.create_dataset(name=key, data=value)
+
+        # If this did not work, try serializing it to yaml and dumping the string to the dataset
+        except TypeError:
+            ds = hdf5_group.create_dataset(name=key, data=string_(yaml.safe_dump(value)))
+            ds.attrs.create(name=TYPE_ID_HDF5, data=string_("yaml"))
+
+    def dump_hdf5(self, data_dict: dict, fname: str) -> None:
+        """Writes a dictionary of data into an hdf5 file.
+
+        Parameters
+        ----------
+        data_dict : dict
+            A dictionary of data with strings or tuples as keys and data or other dicts as values.
+        fname : str
+            path to the .hdf5 file.
+        """
+
+        def _save_group_data(data_dict: dict, hdf5_group: h5py.Group) -> None:
+            """Recursively save the data to a group with a non-dict data as base case."""
+
+            for key, value in data_dict.items():
+
+                # if tuple as key, combine into a single string
+                if isinstance(key, tuple):
+                    key = "_".join((str(i) for i in key))
+
+                # if dictionary as item in dict, create subgroup and recurse
+                if isinstance(value, dict):
+                    hdf5_subgroup = hdf5_group.create_group(key)
+                    _save_group_data(value, hdf5_subgroup)
+
+                # otherwise (actual data), just encode it and save it to the group as a dataset
+                else:
+                    self.pack_dataset(hdf5_group, key, value)
+
+        # open the file and write to it recursively
+        with h5py.File(fname, "w") as f:
+            _save_group_data(data_dict, f)
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""

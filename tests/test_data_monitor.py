@@ -160,7 +160,7 @@ def test_sel_mode_index():
     assert isinstance(
         field_data.monitor, FieldMonitor
     ), "ModeFieldMonitor wasnt converted to FieldMonitor."
-    for _, (scalar_field, _, _) in field_data.field_components.items():
+    for _, scalar_field in field_data.field_components.items():
         assert "mode_index" not in scalar_field.coords, "mode_index coordinate remained in data."
 
 

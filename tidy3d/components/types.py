@@ -182,6 +182,21 @@ class tidycomplex(complex):  # pylint: disable=invalid-name
         field_schema.update(ComplexNumber.schema())
 
 
+""" Data """
+
+
+class DataObject(pydantic.BaseModel):
+    """Complex number with a well defined schema."""
+
+    data_dict: dict
+    data_type: type
+
+    @property
+    def as_data_array(self):
+        """return complex representation of ComplexNumber."""
+        return data_type.from_dict(self.data_dict)
+
+
 """ geometric """
 
 Size1D = pydantic.NonNegativeFloat

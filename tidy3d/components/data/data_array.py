@@ -6,6 +6,7 @@ import xarray as xr
 import numpy as np
 
 from ...constants import HERTZ, SECOND, MICROMETER
+from ..types import DataObject
 
 # TODO: docstring examples?
 # TODO: constrain xarray creation by specifying type of the data?
@@ -53,6 +54,27 @@ class DataArray(xr.DataArray):
 
         # call xarray's initializer to make the data array
         super().__init__(*args, **kwargs)
+
+    @classmethod
+    def __get_validators__(cls):
+        """Defines which validator function to use for ComplexNumber."""
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, value):
+        """What gets called when you construct a DataArray."""
+
+        if isinstance(value, DataObject):
+            return value.as_data_array
+        if isinstance(value, dict):
+            c = DataObject(**value)
+            return c.as_data_array
+        return cls(value)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        """Sets the schema of ComplexNumber."""
+        field_schema.update(DataObject.schema())
 
 
 class ScalarFieldDataArray(DataArray):

@@ -12,7 +12,6 @@ from ..types import Ax, Axis
 from ..viz import equal_aspect, add_ax_if_none
 from ...log import log, DataError
 
-# TODO: final decay value
 # TODO: saving and loading from hdf5 group or json file
 # TODO: docstring examples?
 # TODO: ModeSolverData
@@ -85,8 +84,9 @@ class SimulationData(Tidy3dData):
         """Returns value of the field decay at the final time step."""
         log_str = self.log
         if log_str is None:
-            raise DataError("No log string in the SimulationData object, "
-                "can't find final decay value.")
+            raise DataError(
+                "No log string in the SimulationData object, " "can't find final decay value."
+            )
         lines = log_str.split("\n")
         decay_lines = [l for l in lines if "field decay" in l]
         final_decay = 1.0
@@ -138,7 +138,8 @@ class SimulationData(Tidy3dData):
         mon_data = self[monitor_name]
         if not isinstance(mon_data, AbstractFieldData):
             raise DataError(
-                f"data for monitor '{monitor_name}' does not contain field data as it is a `{type(mon_data)}`."
+                f"data for monitor '{monitor_name}' does not contain field data "
+                f"as it is a `{type(mon_data)}`."
             )
         return mon_data
 
@@ -169,7 +170,7 @@ class SimulationData(Tidy3dData):
         # pass coords if each of the scalar field data have more than one coordinate along a dim
         xyz_kwargs = {}
         for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
-            scalar_data = [data for _, (data, _, _) in monitor_data.field_components.items()]
+            scalar_data = [data for _, data in monitor_data.field_components.items()]
             coord_lens = [len(data.coords[dim]) for data in scalar_data if data is not None]
             if all([ncoords > 1 for ncoords in coord_lens]):
                 xyz_kwargs[dim] = centers
@@ -271,28 +272,35 @@ class SimulationData(Tidy3dData):
             field_monitor_data = self.load_field_monitor(field_monitor_name)
             if field_name not in field_monitor_data.field_components:
                 raise DataError(f"field_name '{field_name}' not found in data.")
-            field_data, _, _ = field_monitor_data.field_components[field_name]
+            field_data = field_monitor_data.field_components[field_name]
             if field_data is None:
                 raise DataError(
-                    f"field_name '{field_name}' was not stored in data, must be specified in the monitor.fields"
+                    f"field_name '{field_name}' was not stored in data, "
+                    "must be specified in the monitor.fields"
                 )
 
         # select the extra coordinates out of the data
         field_data = field_data.interp(**sel_kwargs)
         field_data = field_data.squeeze(drop=True)
-        final_coords = {k: v for k, v in field_data.coords.items() if v.size > 1}
+        non_scalar_coords = {name: val for name, val in field_data.coords.items() if val.size > 1}
 
         # assert the data is valid for plotting
-        if len(final_coords) != 2:
+        if len(non_scalar_coords) != 2:
             raise DataError(
-                f"Data after selection has {len(final_coords)} coordinates ({list(final_coords.keys())}), must be 2 spatial coordinates for plotting on plane. Please add keyword arguments to `plot_field()` to select out other"
+                f"Data after selection has {len(non_scalar_coords)} coordinates "
+                f"({list(non_scalar_coords.keys())}), "
+                "must be 2 spatial coordinates for plotting on plane. "
+                "Please add keyword arguments to `plot_field()` to select out the other coords."
             )
 
-        spatial_coords_in_data = {coord_name: (coord_name in final_coords) for coord_name in "xyz"}
+        spatial_coords_in_data = {
+            coord_name: (coord_name in non_scalar_coords) for coord_name in "xyz"
+        }
 
         if sum(spatial_coords_in_data.values()) != 2:
             raise DataError(
-                f"All coordinates in the data after selection must be spatial (x, y, z), given {final_coords.keys()}."
+                f"All coordinates in the data after selection must be spatial (x, y, z), "
+                " given {non_scalar_coords.keys()}."
             )
 
         # get the spatial coordinate corresponding to the plane
@@ -393,7 +401,7 @@ class SimulationData(Tidy3dData):
         # plot the field
         xy_coord_labels = list("xyz")
         xy_coord_labels.pop(axis)
-        x_coord_label, y_coord_label = xy_coord_labels  # pylint:disable=unbalanced-tuple-unpacking
+        x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
         field_data.plot(
             ax=ax, x=x_coord_label, y=y_coord_label, cmap=cmap, vmin=vmin, vmax=vmax, robust=robust
         )
