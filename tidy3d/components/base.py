@@ -244,7 +244,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation = Simulation.from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
-        self_data_dict = cls.load_hdf5(fname)
+        self_data_dict = cls.hdf5_to_dict(fname)
         return cls.parse_obj(self_data_dict, **parse_raw_kwargs)
 
     def to_hdf5(self, fname: str) -> None:
@@ -262,6 +262,34 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         data_dict = self.dict()
         self.dump_hdf5(data_dict, fname)
+
+    """=============================================================================================
+    Code modified from the hdfdict package: https://github.com/SiggiGue/hdfdict
+
+    MIT License
+
+    Copyright (c) 2018 Siegfried Gündert
+    Copyright Flexcompute 2022
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+    """
+
 
     @staticmethod
     def unpack_dataset(dataset: h5py.Dataset) -> Any:
@@ -304,7 +332,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return value
 
     @classmethod
-    def load_hdf5(cls, fname: str) -> dict:
+    def hdf5_to_dict(cls, fname: str) -> dict:
         """Load an hdf5 file into a dictionary storing its unpacked contents.
 
         Parameters
@@ -388,6 +416,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # open the file and write to it recursively
         with h5py.File(fname, "w") as f:
             _save_group_data(data_dict, f)
+
+
+    """End hdfdict modification
+    ============================================================================================="""
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""
