@@ -3,13 +3,10 @@
 from typing import Any
 from functools import wraps
 
-import matplotlib.pylab as plt
-from matplotlib.patches import PathPatch
-from matplotlib.path import Path
+
 from numpy import array, concatenate, ones
 import pydantic as pd
 
-from .types import Ax
 from .base import Tidy3dBaseModel
 
 """ Constants """
@@ -36,42 +33,8 @@ MAX_ARROW_WIDTH_FACTOR = 0.02
 """ Decorators """
 
 
-def make_ax() -> Ax:
-    """makes an empty `ax`."""
-    _, ax = plt.subplots(1, 1, tight_layout=True)
-    return ax
 
 
-def add_ax_if_none(plot):
-    """Decorates `plot(*args, **kwargs, ax=None)` function.
-    if ax=None in the function call, creates an ax and feeds it to rest of function.
-    """
-
-    @wraps(plot)
-    def _plot(*args, **kwargs) -> Ax:
-        """New plot function using a generated ax if None."""
-        if kwargs.get("ax") is None:
-            ax = make_ax()
-            kwargs["ax"] = ax
-        return plot(*args, **kwargs)
-
-    return _plot
-
-
-def equal_aspect(plot):
-    """Decorates a plotting function returning a matplotlib axes.
-    Ensures the aspect ratio of the returned axes is set to equal.
-    Useful for 2D plots, like sim.plot() or sim_data.plot_fields()
-    """
-
-    @wraps(plot)
-    def _plot(*args, **kwargs) -> Ax:
-        """New plot function with equal aspect ratio axes returned."""
-        ax = plot(*args, **kwargs)
-        ax.set_aspect("equal")
-        return ax
-
-    return _plot
 
 
 """ plot parameters """
@@ -166,70 +129,6 @@ class Polygon:
         if value is None:
             value = self.context[1:]
         return value
-
-
-def polygon_path(polygon):
-    """Constructs a compound matplotlib path from a Shapely or GeoJSON-like
-    geometric object"""
-
-    def coding(obj):
-        # The codes will be all "LINETO" commands, except for "MOVETO"s at the
-        # beginning of each subpath
-        n = len(getattr(obj, "coords", None) or obj)
-        vals = ones(n, dtype=Path.code_type) * Path.LINETO
-        vals[0] = Path.MOVETO
-        return vals
-
-    if hasattr(polygon, "geom_type"):  # Shapely
-        ptype = polygon.geom_type
-        if ptype == "Polygon":
-            polygon = [Polygon(polygon)]
-        elif ptype == "MultiPolygon":
-            polygon = [Polygon(p) for p in polygon.geoms]
-        else:
-            raise ValueError("A polygon or multi-polygon representation is required")
-
-    else:  # GeoJSON
-        polygon = getattr(polygon, "__geo_interface__", polygon)
-        ptype = polygon["type"]
-        if ptype == "Polygon":
-            polygon = [Polygon(polygon)]
-        elif ptype == "MultiPolygon":
-            polygon = [Polygon(p) for p in polygon["coordinates"]]
-        else:
-            raise ValueError("A polygon or multi-polygon representation is required")
-
-    vertices = concatenate(
-        [
-            concatenate(
-                [array(t.exterior.coords)[:, :2]] + [array(r.coords)[:, :2] for r in t.interiors]
-            )
-            for t in polygon
-        ]
-    )
-    codes = concatenate(
-        [concatenate([coding(t.exterior)] + [coding(r) for r in t.interiors]) for t in polygon]
-    )
-
-    return Path(vertices, codes)
-
-
-def polygon_patch(polygon, **kwargs):
-    """Constructs a matplotlib patch from a geometric object
-
-    The `polygon` may be a Shapely or GeoJSON-like object with or without holes.
-    The `kwargs` are those supported by the matplotlib.patches.Polygon class
-    constructor. Returns an instance of matplotlib.patches.PathPatch.
-
-    Example
-    -------
-    >>> b = Point(0, 0).buffer(1.0) # doctest: +SKIP
-    >>> patch = PolygonPatch(b, fc='blue', ec='blue', alpha=0.5) # doctest: +SKIP
-    >>> axis.add_patch(patch) # doctest: +SKIP
-
-    """
-    return PathPatch(polygon_path(polygon), **kwargs)
-
 
 """End descartes modification
 ================================================================================================="""

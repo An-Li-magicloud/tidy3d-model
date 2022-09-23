@@ -9,11 +9,10 @@ import pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Direction, Polarization, Ax, FreqBound, ArrayLike, Axis, Bound
+from .types import Direction, Polarization, FreqBound, ArrayLike, Axis, Bound
 from .validators import assert_plane, validate_name_str
 from .geometry import Box
 from .mode import ModeSpec
-from .viz import add_ax_if_none, PlotParams, plot_params_source
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
 from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF
 from ..constants import inf  # pylint:disable=unused-import
@@ -94,86 +93,7 @@ class SourceTime(ABC, Tidy3dBaseModel):
         dft_matrix = np.exp(2j * np.pi * freqs[:, None] * times_cut) / np.sqrt(2 * np.pi)
         return dt * dft_matrix @ time_amps
 
-    @add_ax_if_none
-    def plot(self, times: ArrayLike[float, 1], ax: Ax = None) -> Ax:
-        """Plot the complex-valued amplitude of the source time-dependence.
 
-        Parameters
-        ----------
-        times : np.ndarray
-            Array of times (seconds) to plot source at.
-            To see source time amplitude for a specific :class:`Simulation`,
-            pass ``simulation.tmesh``.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        times = np.array(times)
-        amp_complex = self.amp_time(times)
-
-        ax.plot(times, amp_complex.real, color="blueviolet", label="real")
-        ax.plot(times, amp_complex.imag, color="crimson", label="imag")
-        ax.plot(times, np.abs(amp_complex), color="k", label="abs")
-        ax.set_xlabel("time (s)")
-        ax.set_title("source amplitude")
-        ax.legend()
-        ax.set_aspect("auto")
-        return ax
-
-    @add_ax_if_none
-    def plot_spectrum(
-        self,
-        times: ArrayLike[float, 1],
-        num_freqs: int = 101,
-        ax: Ax = None,
-        complex_fields: bool = False,
-    ) -> Ax:
-        """Plot the complex-valued amplitude of the source time-dependence.
-
-        Parameters
-        ----------
-        times : np.ndarray
-            Array of evenly-spaced times (seconds) to evaluate source time-dependence at.
-            The spectrum is computed from this value and the source time frequency content.
-            To see source spectrum for a specific :class:`Simulation`,
-            pass ``simulation.tmesh``.
-        num_freqs : int = 101
-            Number of frequencies to plot within the SourceTime.frequency_range.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        complex_fields : bool
-            Whether time domain fields are complex, e.g., for Bloch boundaries
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        times = np.array(times)
-
-        dts = np.diff(times)
-        if not np.allclose(dts, dts[0] * np.ones_like(dts)):
-            raise SetupError("Supplied times not evenly spaced.")
-
-        dt = np.mean(dts)
-
-        fmin, fmax = self.frequency_range()
-        freqs = np.linspace(fmin, fmax, num_freqs)
-
-        spectrum = self.spectrum(times=times, dt=dt, freqs=freqs, complex_fields=complex_fields)
-
-        ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
-        ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
-        ax.plot(freqs, np.abs(spectrum), color="k", label="abs")
-        ax.set_xlabel("frequency (Hz)")
-        ax.set_title("source spectrum")
-        ax.legend()
-        ax.set_aspect("auto")
-        return ax
 
     @abstractmethod
     def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
@@ -283,10 +203,6 @@ class Source(Box, ABC):
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
 
-    @cached_property
-    def plot_params(self) -> PlotParams:
-        """Default parameters for plotting a Source object."""
-        return plot_params_source
 
     _name_validator = validate_name_str()
 
@@ -306,52 +222,6 @@ class Source(Box, ABC):
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
 
-    def plot(  #  pylint:disable=too-many-arguments
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        sim_bounds: Bound = None,
-        **patch_kwargs
-    ) -> Ax:
-
-        # call the `Source.plot()` function first.
-        ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
-
-        kwargs_alpha = patch_kwargs.get("alpha")
-        arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
-
-        # then add the arrow based on the propagation direction
-        if self._dir_vector is not None:
-
-            ax = self._plot_arrow(
-                x=x,
-                y=y,
-                z=z,
-                ax=ax,
-                direction=self._dir_vector,
-                color=ARROW_COLOR_SOURCE,
-                alpha=arrow_alpha,
-                both_dirs=False,
-                sim_bounds=sim_bounds,
-            )
-
-        if self._pol_vector is not None:
-
-            ax = self._plot_arrow(
-                x=x,
-                y=y,
-                z=z,
-                ax=ax,
-                direction=self._pol_vector,
-                color=ARROW_COLOR_POLARIZATION,
-                alpha=arrow_alpha,
-                both_dirs=False,
-                sim_bounds=sim_bounds,
-            )
-
-        return ax
 
 
 """ Sources either: (1) implement current distributions or (2) generate fields."""

@@ -11,7 +11,6 @@ from typing_extensions import Annotated
 
 import pydantic
 import numpy as np
-from matplotlib.axes._subplots import Axes
 from shapely.geometry.base import BaseGeometry
 from ..log import ValidationError
 
@@ -221,4 +220,3 @@ FreqArray = Union[Tuple[float, ...], ArrayLike[float, 1]]
 
 """ plotting """
 
-Ax = Axes

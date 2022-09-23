@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Literal, Ax, EMField, ArrayLike, Bound, FreqArray
+from .types import Literal, EMField, ArrayLike, Bound, FreqArray
 from .geometry import Box
 from .validators import assert_plane
 from .base import cached_property
@@ -208,35 +208,6 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
 
-    def plot(  # pylint:disable=too-many-arguments
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        sim_bounds: Bound = None,
-        **patch_kwargs,
-    ) -> Ax:
-
-        # call the monitor.plot() function first
-        ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
-
-        kwargs_alpha = patch_kwargs.get("alpha")
-        arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
-
-        # and then add an arrow using the direction comuputed from `_dir_arrow`.
-        ax = self._plot_arrow(
-            x=x,
-            y=y,
-            z=z,
-            ax=ax,
-            direction=self._dir_arrow,
-            color=ARROW_COLOR_MONITOR,
-            alpha=arrow_alpha,
-            both_dirs=True,
-            sim_bounds=sim_bounds,
-        )
-        return ax
 
     @cached_property
     def _dir_arrow(self) -> Tuple[float, float, float]:

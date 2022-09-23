@@ -1,26 +1,22 @@
 # pylint: disable=unused-import, too-many-lines
 """Classes for Storing Monitor and Simulation Data."""
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Dict, List, Union, Optional, Tuple
-import logging
 
-import xarray as xr
 import numpy as np
-import h5py
 import pydantic as pd
+import xarray as xr
 
-from .types import Numpy, Direction, Array, Literal, Ax, Coordinate, Axis, TYPE_TAG_STR
 from .base import Tidy3dBaseModel
-from .simulation import Simulation
 from .boundary import Symmetry, BlochBoundary
-from .monitor import Monitor
-from .grid import Grid, Coords
-from .viz import add_ax_if_none, equal_aspect
-from ..log import DataError, log
+from .grid import Coords
+from .simulation import Simulation
+from .types import Numpy, Direction, Array, Coordinate, TYPE_TAG_STR
 from ..constants import HERTZ, SECOND, MICROMETER
+from ..log import DataError, log
 from ..updater import Updater
-
 
 # mapping of data coordinates to units for assigning .attrs to the xarray objects
 DIM_ATTRS = {
@@ -114,12 +110,7 @@ class Tidy3dData(Tidy3dBaseDataModel):
     def load_from_group(cls, hdf5_grp):
         """Load data contents from an hdf5 group."""
 
-    @staticmethod
-    def save_string(hdf5_grp, string_key: str, string_value: str) -> None:
-        """Save a string to an hdf5 group."""
-        str_type = h5py.special_dtype(vlen=str)
-        hdf5_grp.create_dataset(string_key, (1,), dtype=str_type)
-        hdf5_grp[string_key][0] = string_value
+
 
     @staticmethod
     def decode_bytes(bytes_dataset) -> str:
@@ -1066,113 +1057,6 @@ class AbstractSimulationData(Tidy3dBaseDataModel, ABC):
         description="Original :class:`.Simulation` associated with the data.",
     )
 
-    @equal_aspect
-    @add_ax_if_none
-    # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
-    def plot_field_array(
-        self,
-        field_data: xr.DataArray,
-        axis: Axis,
-        position: float,
-        val: Literal["real", "imag", "abs"] = "real",
-        freq: float = None,
-        eps_alpha: float = 0.2,
-        robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot the field data for a monitor with simulation plot overlayed.
-
-        Parameters
-        ----------
-        field_data: xr.DataArray
-            DataArray with the field data to plot.
-        axis: Axis
-            Axis normal to the plotting plane.
-        position: float
-            Position along the axis.
-        val : Literal['real', 'imag', 'abs'] = 'real'
-            Which part of the field to plot.
-        freq: float = None
-            Frequency at which the permittivity is evaluated at (if dispersive).
-            By default, chooses permittivity as frequency goes to infinity.
-        eps_alpha : float = 0.2
-            Opacity of the structure permittivity.
-            Must be between 0 and 1 (inclusive).
-        robust : bool = True
-            If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
-            to compute the color limits. This helps in visualizing the field patterns especially
-            in the presence of a source.
-        vmin : float = None
-            The lower bound of data range that the colormap covers. If `None`, they are
-            inferred from the data and other keyword arguments.
-        vmax : float = None
-            The upper bound of data range that the colormap covers. If `None`, they are
-            inferred from the data and other keyword arguments.
-        ax : matplotlib.axes._subplots.Axes = None
-            matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        # select the cross section data
-        axis_label = "xyz"[axis]
-        interp_kwarg = {axis_label: position}
-
-        if len(field_data.coords[axis_label]) > 1:
-            try:
-                field_data = field_data.interp(**interp_kwarg)
-
-            except Exception as e:
-                raise DataError(f"Could not interpolate data at {axis_label}={position}.") from e
-
-        # select the field value
-        if val not in ("real", "imag", "abs"):
-            raise DataError(f"'val' must be one of ``{'real', 'imag', 'abs'}``, given {val}")
-
-        if val == "real":
-            field_data = field_data.real
-        elif val == "imag":
-            field_data = field_data.imag
-        elif val == "abs":
-            field_data = abs(field_data)
-
-        if val == "abs":
-            cmap = "magma"
-            eps_reverse = True
-        else:
-            cmap = "RdBu"
-            eps_reverse = False
-
-        # plot the field
-        xy_coord_labels = list("xyz")
-        xy_coord_labels.pop(axis)
-        x_coord_label, y_coord_label = xy_coord_labels  # pylint:disable=unbalanced-tuple-unpacking
-        field_data.plot(
-            ax=ax, x=x_coord_label, y=y_coord_label, robust=robust, cmap=cmap, vmin=vmin, vmax=vmax
-        )
-
-        # plot the simulation epsilon
-        ax = self.simulation.plot_structures_eps(
-            freq=freq,
-            cbar=False,
-            alpha=eps_alpha,
-            reverse=eps_reverse,
-            ax=ax,
-            **{axis_label: position},
-        )
-
-        # set the limits based on the xarray coordinates min and max
-        x_coord_values = field_data.coords[x_coord_label]
-        y_coord_values = field_data.coords[y_coord_label]
-        ax.set_xlim(min(x_coord_values), max(x_coord_values))
-        ax.set_ylim(min(y_coord_values), max(y_coord_values))
-
-        return ax
 
 
 class SimulationData(AbstractSimulationData):
@@ -1297,130 +1181,6 @@ class SimulationData(AbstractSimulationData):
         return field_monitor_data.colocate(x=xs, y=ys, z=zs)
 
     # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
-    def plot_field(
-        self,
-        field_monitor_name: str,
-        field_name: str,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        val: Literal["real", "imag", "abs"] = "real",
-        freq: float = None,
-        time: float = None,
-        mode_index: int = None,
-        eps_alpha: float = 0.2,
-        robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot the field data for a monitor with simulation plot overlayed.
-
-        Parameters
-        ----------
-        field_monitor_name : str
-            Name of :class:`FieldMonitor` or :class:`FieldTimeData` to plot.
-        field_name : str
-            Name of `field` in monitor to plot (eg. 'Ex').
-            Also accepts `'int'` to plot intensity.
-        x : float = None
-            Position of plane in x direction.
-        y : float = None
-            Position of plane in y direction.
-        z : float = None
-            Position of plane in z direction.
-        val : Literal['real', 'imag', 'abs'] = 'real'
-            Which part of the field to plot.
-            If ``field_name='int'``, this has no effect.
-        freq: float = None
-            If monitor is a :class:`FieldMonitor`, specifies the frequency (Hz) to plot the field.
-            Also sets the frequency at which the permittivity is evaluated at (if dispersive).
-            By default, chooses permittivity as frequency goes to infinity.
-        time: float = None
-            if monitor is a :class:`FieldTimeMonitor`, specifies the time (sec) to plot the field.
-        mode_index: int = None
-            if monitor is a :class:`ModeFieldMonitor`, specifies which mode index to plot.
-        eps_alpha : float = 0.2
-            Opacity of the structure permittivity.
-            Must be between 0 and 1 (inclusive).
-        robust : bool = True
-            If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
-            to compute the color limits. This helps in visualizing the field patterns especially
-            in the presence of a source.
-        vmin : float = None
-            The lower bound of data range that the colormap covers. If `None`, they are
-            inferred from the data and other keyword arguments.
-        vmax : float = None
-            The upper bound of data range that the colormap covers. If `None`, they are
-            inferred from the data and other keyword arguments.
-        ax : matplotlib.axes._subplots.Axes = None
-            matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        # get the monitor data
-        monitor_data = self[field_monitor_name]
-        self.ensure_field_monitor(monitor_data)
-        if isinstance(monitor_data, ModeFieldData):
-            if mode_index is None:
-                raise DataError("'mode_index' must be supplied to plot a ModeFieldMonitor.")
-            monitor_data = monitor_data.sel_mode_index(mode_index=mode_index)
-
-        # get the field data component
-        if field_name == "int":
-            monitor_data = self.at_centers(field_monitor_name)
-            xr_data = 0.0
-            for field in ("Ex", "Ey", "Ez"):
-                field_data = monitor_data[field]
-                xr_data += abs(field_data) ** 2
-                xr_data.name = "Intensity"
-            val = "abs"
-        else:
-            monitor_data.ensure_member_exists(field_name)
-            xr_data = monitor_data.data_dict.get(field_name).data
-
-        # select the frequency or time value
-        if "f" in xr_data.coords:
-            if freq is None:
-                raise DataError("'freq' must be supplied to plot a FieldMonitor.")
-            field_data = xr_data.sel(f=freq, method="nearest")
-        elif "t" in xr_data.coords:
-            if time is None:
-                raise DataError("'time' must be supplied to plot a FieldTimeMonitor.")
-            field_data = xr_data.sel(t=time, method="nearest")
-        else:
-            raise DataError("Field data has neither time nor frequency data, something went wrong.")
-
-        if x is None and y is None and z is None:
-            """If a planar monitor, infer x/y/z based on the plane position and normal."""
-            monitor = self.simulation.get_monitor_by_name(field_monitor_name)
-            try:
-                axis = monitor.geometry.size.index(0.0)
-                position = monitor.geometry.center[axis]
-            except Exception as e:
-                raise ValueError(
-                    "If none of 'x', 'y' or 'z' is specified, monitor must have a "
-                    "zero-sized dimension"
-                ) from e
-        else:
-            axis, position = self.simulation.parse_xyz_kwargs(x=x, y=y, z=z)
-
-        return self.plot_field_array(
-            field_data=field_data,
-            axis=axis,
-            position=position,
-            val=val,
-            freq=freq,
-            eps_alpha=eps_alpha,
-            robust=robust,
-            vmin=vmin,
-            vmax=vmax,
-            ax=ax,
-        )
 
     def normalize(self, normalize_index: Optional[int] = 0):
         """Return a copy of the :class:`.SimulationData` object with data normalized by source.
@@ -1504,118 +1264,6 @@ class SimulationData(AbstractSimulationData):
 
         sim_data_norm._normalize_index = normalize_index  # pylint:disable=protected-access
         return sim_data_norm
-
-    def to_file(self, fname: str) -> None:
-        """Export :class:`SimulationData` to single hdf5 file including monitor data.
-
-        Parameters
-        ----------
-        fname : str
-            Path to .hdf5 data file (including filename).
-        """
-
-        with h5py.File(fname, "a") as f_handle:
-
-            # save json string as a dataset
-            Tidy3dData.save_string(f_handle, "sim_json", self.simulation.json())
-
-            # save log string as a dataset
-            if self.log_string:
-                Tidy3dData.save_string(f_handle, "log_string", self.log_string)
-
-            # save diverged and normalized flags as attributes
-            f_handle.attrs["diverged"] = self.diverged
-            if self._normalize_index:
-                f_handle.attrs["normalize_index"] = self._normalize_index
-
-            # make a group for monitor_data
-            mon_data_grp = f_handle.create_group("monitor_data")
-            for mon_name, mon_data in self.monitor_data.items():
-
-                # for each monitor, make new group with the same name
-                mon_grp = mon_data_grp.create_group(mon_name)
-                mon_data.add_to_group(mon_grp)
-
-    @classmethod
-    def from_file(
-        cls, fname: str, normalize_index: Optional[int] = 0, **kwargs
-    ):  # pylint:disable=arguments-differ
-        """Load :class:`SimulationData` from .hdf5 file.
-
-        Parameters
-        ----------
-        fname : str
-            Path to .hdf5 data file (including filename).
-
-        Returns
-        -------
-        :class:`SimulationData`
-            A :class:`SimulationData` instance.
-        """
-
-        # read from file at fname
-        with h5py.File(fname, "r") as f_handle:
-
-            # construct the original simulation from the json string
-            sim_json_str = Tidy3dData.load_string(f_handle, "sim_json")
-            updater = Updater.from_string(sim_json_str)
-            sim_dict = updater.update_to_current()
-            simulation = Simulation.parse_obj(sim_dict)
-
-            # get the log if exists
-            log_string = Tidy3dData.load_string(f_handle, "log_string")
-
-            # set the diverged flag
-            # TODO: add link to documentation discussing divergence
-            diverged = f_handle.attrs["diverged"]
-            if diverged:
-                logging.warning("Simulation run has diverged!")
-
-            # get whether this data has been normalized
-            normalize_index_file = f_handle.attrs.get("normalize_index")
-
-            # loop through monitor dataset and create all MonitorData instances
-            monitor_data_dict = {}
-            for monitor_name, monitor_data in f_handle["monitor_data"].items():
-
-                # load this MonitorData instance, add to monitor_data dict
-                _data_type = DATA_TYPE_MAP[Tidy3dData.load_string(monitor_data, TYPE_TAG_STR)]
-                monitor_data_instance = _data_type.load_from_group(monitor_data)
-                monitor_data_dict[monitor_name] = monitor_data_instance
-
-        # create a SimulationData object
-        sim_data = cls(
-            simulation=simulation,
-            monitor_data=monitor_data_dict,
-            log_string=log_string,
-            diverged=diverged,
-            **kwargs,
-        )
-
-        # make sure to tag the SimulationData with the normalize_index stored from file
-        sim_data._normalize_index = normalize_index_file
-
-        # if normalize_index supplied as None, just return the sim_data right away (norm or not)
-        if normalize_index is None:
-            return sim_data
-
-        # if the data in the file has not been normalized, normalize with supplied index
-        if normalize_index_file is None:
-            return sim_data.normalize(normalize_index=normalize_index)
-
-        # from here on, normalze_index and normalize_index_file are present
-
-        # if they are the same, just return as normal
-        if normalize_index == normalize_index_file:
-            return sim_data
-
-        # if they aren't the same, throw an error
-        raise DataError(
-            "Data from this file is already normalized with "
-            f"normalize_index={normalize_index_file}, can't normalize with supplied "
-            f"normalize_index={normalize_index} unless they are the same "
-            "or supplied normalize index is `None`."
-        )
 
     def __eq__(self, other):
         """Check equality against another :class:`SimulationData` instance.

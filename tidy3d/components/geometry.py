@@ -1,23 +1,22 @@
 # pylint:disable=too-many-lines, too-many-arguments
 """Defines spatial extent of objects."""
 
-from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Any, Callable
-from math import isclose
 import functools
+from abc import ABC, abstractmethod
+from math import isclose
+from typing import List, Tuple, Union, Any, Callable
 
-import pydantic
 import numpy as np
+import pydantic
 from shapely.geometry import Point, Polygon, box, MultiPolygon
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayLike
-from .types import Vertices, Ax, Shapely, annotate_type
-from .viz import add_ax_if_none, equal_aspect
+from .types import Vertices, Shapely, annotate_type
 from .viz import PLOT_BUFFER, ARROW_LENGTH_FACTOR, ARROW_WIDTH_FACTOR, MAX_ARROW_WIDTH_FACTOR
-from .viz import PlotParams, plot_params_geometry, polygon_patch
-from ..log import Tidy3dKeyError, SetupError, ValidationError
+from .viz import plot_params_geometry
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN
+from ..log import Tidy3dKeyError, SetupError, ValidationError
 
 # for sampling polygon in slanted polyslab along  z-direction for
 # validating polygon to be non_intersecting.
@@ -169,56 +168,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
 
-    @equal_aspect
-    @add_ax_if_none
-    def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
-    ) -> Ax:
-        """Plot geometry cross section at single (x,y,z) coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        **patch_kwargs
-            Optional keyword arguments passed to the matplotlib patch plotting of structure.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2nf5c2fk>`_.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        # find shapes that intersect self at plane
-        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        shapes_intersect = self.intersections(x=x, y=y, z=z)
-
-        plot_params = self.plot_params.include_kwargs(**patch_kwargs)
-
-        # for each intersection, plot the shape
-        for shape in shapes_intersect:
-            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
-
-        # clean up the axis display
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
-        ax.set_aspect("equal")
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
-        return ax
-
-    def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
-        """Defines how a shape is plotted on a matplotlib axes."""
-        _shape = self.evaluate_inf_shape(shape)
-        patch = polygon_patch(_shape, **plot_params.to_kwargs())
-        ax.add_artist(patch)
-        return ax
 
     @classmethod
     def strip_coords(
@@ -320,35 +269,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
         return (xmin - buffer, xmax + buffer), (ymin - buffer, ymax + buffer)
-
-    def add_ax_labels_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER) -> Ax:
-        """Sets the x,y labels based on ``axis`` and the extends based on ``self.bounds``.
-
-        Parameters
-        ----------
-        axis : int
-            Integer index into 'xyz' (0,1,2).
-        ax : matplotlib.axes._subplots.Axes
-            Matplotlib axes to add labels and limits on.
-        buffer : float = 0.3
-            Amount of space to place around the limits on the + and - sides.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        xlabel, ylabel = self._get_plot_labels(axis=axis)
-        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer)
-
-        # note: axes limits dont like inf values, so we need to evaluate them first if present
-        xmin, xmax, ymin, ymax = (self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax))
-
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-        return ax
 
     @staticmethod
     def _evaluate_inf(v):
@@ -823,120 +743,6 @@ class Box(Centered):
         """
         return Box(center=self.center, size=self.size)
 
-    def _plot_arrow(  # pylint:disable=too-many-arguments, too-many-locals
-        self,
-        direction: Tuple[float, float, float],
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        color: str = None,
-        alpha: float = None,
-        length_factor: float = ARROW_LENGTH_FACTOR,
-        width_factor: float = ARROW_WIDTH_FACTOR,
-        both_dirs: bool = False,
-        sim_bounds: Bound = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Adds an arrow to the axis if with options if certain conditions met.
-
-        Parameters
-        ----------
-        direction: Tuple[float, float, float]
-            Normalized vector describing the arrow direction.
-        x : float = None
-            Position of plotting plane in x direction.
-        y : float = None
-            Position of plotting plane in y direction.
-        z : float = None
-            Position of plotting plane in z direction.
-        color : str = None
-            Color of the arrow.
-        alpha : float = None
-            Opacity of the arrow (0, 1)
-        length_factor : float = None
-            How long the (3D, unprojected) arrow is compared to the min(height, width) of the axes.
-        width_factor : float = None
-            How wide the (3D, unprojected) arrow is compared to the min(height, width) of the axes.
-        both_dirs : bool = False
-            If True, plots an arrow ponting in direction and one in -direction.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The matplotlib axes with the arrow added.
-        """
-
-        plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-
-        arrow_length, arrow_width = self._arrow_dims(
-            ax=ax,
-            length_factor=length_factor,
-            width_factor=width_factor,
-            sim_bounds=sim_bounds,
-            plot_axis=plot_axis,
-        )
-
-        # conditions to check to determine whether to plot arrow
-        arrow_intersecting_plane = len(self.intersections(x=x, y=y, z=z)) > 0
-        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
-        components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
-
-        # plot if arrow in plotting plane and some non-zero component can be displayed.
-        if arrow_intersecting_plane and components_in_plane:
-            _, (x0, y0) = self.pop_axis(self.center, axis=plot_axis)
-
-            def add_arrow(sign=1.0):
-                """Add an arrow to the axes and include a sign to direction."""
-                ax.arrow(
-                    x=x0,
-                    y=y0,
-                    dx=sign * arrow_length * dx,
-                    dy=sign * arrow_length * dy,
-                    width=arrow_width,
-                    color=color,
-                    alpha=alpha,
-                    zorder=np.inf,
-                )
-
-            add_arrow(sign=1.0)
-            if both_dirs:
-                add_arrow(sign=-1.0)
-
-        return ax
-
-    def _arrow_dims(  # pylint: disable=too-many-locals
-        self,
-        ax: Ax,
-        length_factor: float = ARROW_LENGTH_FACTOR,
-        width_factor: float = ARROW_WIDTH_FACTOR,
-        sim_bounds: Bound = None,
-        plot_axis: Axis = None,
-    ) -> Tuple[float, float]:
-        """Length and width of arrow based on axes size and length and width factors."""
-
-        if sim_bounds is not None:
-
-            # use the sim_bounds to get sizes
-            rmin, rmax = sim_bounds
-            _, (xmin, ymin) = self.pop_axis(rmin, axis=plot_axis)
-            _, (xmax, ymax) = self.pop_axis(rmax, axis=plot_axis)
-
-        else:
-            # get the sizes of the matplotlib axes
-            xmin, xmax = ax.get_xlim()
-            ymin, ymax = ax.get_ylim()
-
-        width = xmax - xmin
-        height = ymax - ymin
-
-        # apply length factor to the minimum size to get arrow length
-        arrow_length = length_factor * min(width, height)
-
-        # constrain arrow width by the maximum size and the max arrow width factor
-        arrow_width = width_factor * arrow_length
-        arrow_width = min(arrow_width, MAX_ARROW_WIDTH_FACTOR * max(width, height))
-
-        return arrow_length, arrow_width
 
 
 class Sphere(Centered, Circular):

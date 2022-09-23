@@ -4,12 +4,11 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Union, Callable
 
-import pydantic as pd
 import numpy as np
+import pydantic as pd
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import PoleAndResidue, Ax, FreqBound
-from .viz import add_ax_if_none
+from .types import PoleAndResidue, FreqBound
 from .validators import validate_name_str
 from ..constants import C_0, pec_val, EPSILON_0, HERTZ, CONDUCTIVITY, PERMITTIVITY
 from ..log import log, ValidationError
@@ -98,35 +97,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         eps = self.eps_model(frequency)
         return (eps, eps, eps)
 
-    @add_ax_if_none
-    def plot(self, freqs: float, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
-        """Plot n, k of a :class:`Medium` as a function of frequency.
-
-        Parameters
-        ----------
-        freqs: float
-            Frequencies (Hz) to evaluate the medium properties at.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        freqs = np.array(freqs)
-        eps_complex = self.eps_model(freqs)
-        n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
-
-        freqs_thz = freqs / 1e12
-        ax.plot(freqs_thz, n, label="n")
-        ax.plot(freqs_thz, k, label="k")
-        ax.set_xlabel("frequency (THz)")
-        ax.set_title("medium dispersion")
-        ax.legend()
-        ax.set_aspect("auto")
-        return ax
 
     """ Conversion helper functions """
 
@@ -341,25 +311,7 @@ class AnisotropicMedium(AbstractMedium):
         eps_zz = self.zz.eps_model(frequency)
         return (eps_xx, eps_yy, eps_zz)
 
-    @add_ax_if_none
-    def plot(self, freqs: float, ax: Ax = None) -> Ax:
-        """Plot n, k of a :class:`Medium` as a function of frequency."""
 
-        freqs = np.array(freqs)
-        freqs_thz = freqs / 1e12
-
-        for label, medium_component in zip(("xx", "yy", "zz"), (self.xx, self.yy, self.zz)):
-
-            eps_complex = medium_component.eps_model(freqs)
-            n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
-            ax.plot(freqs_thz, n, label=f"n, eps_{label}")
-            ax.plot(freqs_thz, k, label=f"k, eps_{label}")
-
-        ax.set_xlabel("frequency (THz)")
-        ax.set_title("medium dispersion")
-        ax.legend()
-        ax.set_aspect("auto")
-        return ax
 
 
 """ Dispersive Media """

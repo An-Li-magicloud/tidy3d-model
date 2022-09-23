@@ -1,4 +1,6 @@
-{
+from tidy3d.components import Simulation
+
+json = {
   "center": [
     0,
     0,
@@ -13,7 +15,7 @@
   "run_time": 4.0027691346211387e-13,
   "medium": {
     "name": "Vacuum",
-    "frequency_range": null,
+    "frequency_range": None,
     "type": "Medium",
     "permittivity": 1,
     "conductivity": 0
@@ -40,7 +42,7 @@
       },
       "medium": {
         "name": "medium_1",
-        "frequency_range": null,
+        "frequency_range": None,
         "type": "Medium",
         "permittivity": 4,
         "conductivity": 0
@@ -77,7 +79,7 @@
   "boundary_spec": {
     "x": {
       "plus": {
-        "name": null,
+        "name": None,
         "type": "PML",
         "num_layers": 12,
         "parameters": {
@@ -94,7 +96,7 @@
         }
       },
       "minus": {
-        "name": null,
+        "name": None,
         "type": "PML",
         "num_layers": 12,
         "parameters": {
@@ -114,7 +116,7 @@
     },
     "y": {
       "plus": {
-        "name": null,
+        "name": None,
         "type": "PML",
         "num_layers": 12,
         "parameters": {
@@ -131,7 +133,7 @@
         }
       },
       "minus": {
-        "name": null,
+        "name": None,
         "type": "PML",
         "num_layers": 12,
         "parameters": {
@@ -151,7 +153,7 @@
     },
     "z": {
       "plus": {
-        "name": null,
+        "name": None,
         "type": "PML",
         "num_layers": 12,
         "parameters": {
@@ -168,7 +170,7 @@
         }
       },
       "minus": {
-        "name": null,
+        "name": None,
         "type": "PML",
         "num_layers": 12,
         "parameters": {
@@ -215,7 +217,7 @@
         1,
         1
       ],
-      "colocate": false
+      "colocate": False
     }
   ],
   "grid_spec": {
@@ -243,12 +245,14 @@
         "type": "GradedMesher"
       }
     },
-    "wavelength": null,
+    "wavelength": None,
     "override_structures": [],
     "type": "GridSpec"
   },
   "shutoff": 0.00001,
-  "subpixel": true,
+  "subpixel": True,
   "courant": 0.9,
   "version": "1.5.0"
 }
+sim = Simulation.parse_obj(json)
+print(sim)
